@@ -6,6 +6,8 @@ import cv2
 
 import os
 
+from IPython import embed
+
 input_dir = "input"  # read images from os.path.join(input_dir, <filename>)
 output_dir = "output"  # write images to os.path.join(output_dir, <filename>)
 
@@ -20,6 +22,27 @@ def save_image(img, img_name):
 
     """
     cv2.imwrite(os.path.join(output_dir, img_name), img)
+
+
+#def rolling_window(stripe, w_size):
+#    shape = (stripe.shape[1] - w_size +1, stripe.shape[1] - w_size+1) + (w_size, w_size)
+#    strides = (stripe.strides*2)
+#    y = as_strided(stripe, shape=shape, strides=strides)
+#    return y
+
+def rolling_window(stripe, w_size=3):
+    print "\n"
+    print stripe
+    shape = (stripe.shape[0], w_size, w_size)
+    print shape
+    strides = (stripe.itemsize, stripe.shape[0], stripe.shape[1])
+    print strides
+    y = as_strided(stripe, shape=shape, strides=strides)
+    print y.shape
+    print y
+    print "\n"
+    return y
+
 
 def find_best_match(patch, strip):
     """ Find the best x value for the patch in strip
@@ -160,7 +183,7 @@ def main():
     D_L = disparity_ssd(L, R, 7)
     D_R = disparity_ssd(R, L, 7)
 
-    np.clip(D_L, 0, 90)
+    np.clip(D_L, -90, 0) * -1
     normalize(D_L)
     normalize(D_R)
     save_image(D_L, 'ps3-2-a-1.png')
