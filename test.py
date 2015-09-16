@@ -3,6 +3,41 @@ from ps3 import *
 
 class TestPS3Methods(unittest.TestCase):
 
+    def test_best_match_3x3(self):
+        a = np.array([[9, 5, 7, 5, 1],
+                      [8, 6, 4, 4, 5],
+                      [9, 4, 3, 0, 7]])
+
+        patch = np.array([[7, 5, 1],
+                          [4, 4, 5],
+                          [3, 0, 7]])
+
+        expected_x = 2
+
+        best_x = find_best_match(patch, a)
+        self.assertEqual(best_x, expected_x)
+
+
+
+    def test_best_match_3x3(self):
+        a = np.array([[0,1,2,3,4,5,6,7,8,9],
+                      [1,2,3,4,5,6,7,8,9,0],
+                      [2,3,4,5,6,7,8,9,0,1],
+                      [3,4,5,6,7,8,9,0,1,2],
+                      [4,5,6,7,8,9,0,1,2,3]])
+
+        patch = np.array([[3,4,5,6,7],
+                          [4,5,6,7,8],
+                          [5,6,7,8,9],
+                          [6,7,8,9,0],
+                          [7,8,9,0,1]])
+
+        expected_x = 3
+
+        best_x = find_best_match(patch, a)
+        self.assertEqual(best_x, expected_x)
+
+
     def test_rolling_window_3x3(self):
         a = np.array([[0,1,2,3,4],
                       [1,2,3,4,5],

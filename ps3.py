@@ -24,27 +24,26 @@ def save_image(img, img_name):
     cv2.imwrite(os.path.join(output_dir, img_name), img)
 
 
-#def rolling_window(stripe, w_size):
-#    shape = (stripe.shape[1] - w_size +1, stripe.shape[1] - w_size+1) + (w_size, w_size)
-#    strides = (stripe.strides*2)
-#    y = as_strided(stripe, shape=shape, strides=strides)
-#    return y
-
 def rolling_window(stripe, w_size=3):
-    print "\n"
-    print stripe
-    shape = (stripe.shape[0], w_size, w_size)
-    print shape
-    strides = (stripe.itemsize, stripe.shape[0], stripe.shape[1])
-    print strides
+    """ Returns a stride array of the stripe
+
+    Params:
+    -------
+        stripe: the strip to stride
+        w_size: the size of the strides
+
+    Return:
+    -------
+        y: the stride of the stripe
+    """
+
+    shape = (stripe.shape[0]+(w_size/2-1), w_size, w_size)
+    strides = (stripe.itemsize, stripe.strides[0], stripe.strides[1])
     y = as_strided(stripe, shape=shape, strides=strides)
-    print y.shape
-    print y
-    print "\n"
     return y
 
 
-def find_best_match(patch, strip):
+def find_best_match(patch, strip, patches):
     """ Find the best x value for the patch in strip
 
     Params:
@@ -57,20 +56,14 @@ def find_best_match(patch, strip):
         best_x: the best x location that matches
 
     """
-
     best_x = 0
-    w_h, w_w = window_size = patch.shape
-    strip_w, strip_h = strip.shape
-    shape = (strip_w - w_h+1, strip_h - w_w+1) + window_size
-    strides = (strip.strides*2)
-    y = as_strided(strip, shape=shape, strides=strides)
-    ssd = np.sum(np.square(np.subtract(patch,y)),axis=(2,3))
-    if ssd.size > 0:
-        best_x = np.argmin(ssd)
+    y = rolling_window(strip, patch.shape[1])
+    print "scanlines are equal: ",np.array_equal(y,patches)
+    best_x = np.argmin(np.sum(np.square(np.subtract(y,patch)),axis=(1,2)))
     return best_x
 
 
-def match_strips(L_strip, R_strip, b):
+def match_strips(L_strip, R_strip, ksize=3):
     """ match each two stripes together
 
     Params:
@@ -83,15 +76,17 @@ def match_strips(L_strip, R_strip, b):
         disparity: the disparity for these two strips
     """
     steps = L_strip.shape[1]
-    disparity = np.zeros(L_strip.shape)
-    for x in range(steps-1):
-        patch_left = L_strip[:, x:(x+b-1)]
-        x_right = find_best_match(patch_left, R_strip)
-        disparity[0, x + 1] = (x_right-x)
+    disparity = np.zeros((1,L_strip.shape[1]))
+    print "stripes are equal: ", np.array_equal(L_strip, R_strip)
+    patches = rolling_window(L_strip, ksize)
+    for x in range(patches.shape[0]):
+        patch_left = patches[x]
+        x_right = find_best_match(patch_left, R_strip, patches)
+        disparity[0, x] = (x_right-x)
     return disparity
 
 
-def disparity_ssd(L, R, ksize=13):
+def disparity_ssd(L, R, ksize=3):
     """Compute disparity map D(y, x) such that: L(y, x) = R(y, x + D(y, x))
 
     Params:
@@ -107,24 +102,18 @@ def disparity_ssd(L, R, ksize=13):
     if L_size != R_size:
         return -1
 
-    b = ksize+1
     y = 0
-    border = (b-2)/2
+    border = (ksize-1)/2
 
-    padded_r = cv2.copyMakeBorder(R, border,border,border,border,cv2.BORDER_CONSTANT,value=0)
     padded_l = cv2.copyMakeBorder(L, border,border,border,border,cv2.BORDER_CONSTANT,value=0)
+    padded_r = cv2.copyMakeBorder(R, border,border,border,border,cv2.BORDER_CONSTANT,value=0)
     disparity = np.zeros((L_h, L_w))
-    while y <= L_h-1:
-        _y = y+border
-        L_strip = padded_l[_y:_y+b-1,:]
-        R_strip = padded_r[_y:_y+b-1,:]
-        matches = match_strips(L_strip, R_strip, b)
-        distance_to_bottom = L_h-y
-        if disparity[y:y+matches.shape[0],:].shape[0] < b-1:
-            disparity[y:y+matches.shape[0],:] = matches[:distance_to_bottom,border:-border]
-        else:
-            disparity[y:y+matches.shape[0],:] = matches[:,border:-border]
-        y += 1
+    for y in range(border, L_h):
+        L_strip = padded_l[y-border:y+border+1,:]
+        R_strip = padded_r[y-border:y+border+1,:]
+        if np.array_equal(L_strip, R_strip) == False:
+            matches = match_strips(L_strip, R_strip, ksize)
+            disparity[y,:] = matches[:,border:-border]
 
     return disparity
 
@@ -136,7 +125,6 @@ def normalize(img):
     img *= 255
     img = np.uint8(img)
     return img
-
 
 
 def disparity_ncorr(L, R):
@@ -155,21 +143,18 @@ def disparity_ncorr(L, R):
 def main():
     """Run code/call functions to solve problems."""
 
-
     # 1-a
     # Read images
     L = cv2.imread(os.path.join('input', 'pair0-L.png'), 0) * (1 / 255.0)  # grayscale, scale to [0.0, 1.0]
     R = cv2.imread(os.path.join('input', 'pair0-R.png'), 0) * (1 / 255.0)
 
     # Compute disparity (using method disparity_ssd defined in disparity_ssd.py)
-    D_L = disparity_ssd(L, R)  # TODO: implemenet disparity_ssd()
-    D_R = disparity_ssd(R, L)
+    D_L = disparity_ssd(L, R, 7)  # TODO: implemenet disparity_ssd()
+    D_R = disparity_ssd(R, L, 7)
 
     # TODO: Save output images (D_L as output/ps3-1-a-1.png and D_R as output/ps3-1-a-2.png)
     # Note: They may need to be scaled/shifted before saving to show results properly
-    print D_L, D_L.max(), D_L.dtype
     D_L = normalize(D_L)
-    print D_L, D_L.max(), D_L.dtype
     normalize(D_R)
     save_image(D_L, 'ps3-1-a-1.png')
     save_image(D_R, 'ps3-1-a-2.png')
@@ -177,17 +162,17 @@ def main():
     # 2
     # TODO: Apply disparity_ssd() to pair1-L.png and pair1-R.png (in both directions)
 
-    L = cv2.imread(os.path.join('input', 'pair1-L.png'), 0) * (1/255.0)
-    R = cv2.imread(os.path.join('input', 'pair1-R.png'), 0) * (1/255.0)
+    #L = cv2.imread(os.path.join('input', 'pair1-L.png'), 0) * (1/255.0)
+    #R = cv2.imread(os.path.join('input', 'pair1-R.png'), 0) * (1/255.0)
 
-    D_L = disparity_ssd(L, R, 7)
-    D_R = disparity_ssd(R, L, 7)
+    #D_L = disparity_ssd(L, R, 7)
+    #D_R = disparity_ssd(R, L, 7)
 
-    np.clip(D_L, -90, 0) * -1
-    normalize(D_L)
-    normalize(D_R)
-    save_image(D_L, 'ps3-2-a-1.png')
-    save_image(D_R, 'ps3-2-a-2.png')
+    #np.clip(D_L, -90, 0) * -1
+    #normalize(D_L)
+    #normalize(D_R)
+    #save_image(D_L, 'ps3-2-a-1.png')
+    #save_image(D_R, 'ps3-2-a-2.png')
 
     # 3
     # TODO: Apply disparity_ssd() to noisy versions of pair1 images
